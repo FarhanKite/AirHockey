@@ -18,22 +18,38 @@ import com.raywenderlich.airhockey.ui.theme.AirHockeyTheme
 
 class MainActivity : ComponentActivity() {
 
+    private lateinit var glSurfaceView: GLSurfaceView
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
         setContent {
             AirHockeyTheme {
                 AndroidView(
                     modifier = Modifier.fillMaxSize(),
                     factory = { context ->
-                        GLSurfaceView(context).apply {
+                        glSurfaceView = GLSurfaceView(context).apply {
                             setEGLContextClientVersion(2)
                             setRenderer(AirHockeyRenderer(context))
                             renderMode = GLSurfaceView.RENDERMODE_CONTINUOUSLY
                         }
+                        glSurfaceView
                     }
                 )
             }
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        if (::glSurfaceView.isInitialized) {
+            glSurfaceView.onPause()
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::glSurfaceView.isInitialized) {
+            glSurfaceView.onResume()
         }
     }
 }

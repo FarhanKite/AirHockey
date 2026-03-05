@@ -1,17 +1,14 @@
 package com.raywenderlich.airhockey.util
 
-import android.R.attr.bitmap
 import android.content.Context
 import android.graphics.BitmapFactory
-import android.opengl.GLES10.GL_TEXTURE_2D
-import android.opengl.GLES10.glBindTexture
-import android.opengl.GLES10.glDeleteTextures
-import android.opengl.GLES10.glGenTextures
+import android.opengl.GLES20.*
+import android.opengl.GLUtils
 import android.util.Log
 
+object TextureHelper {
 
-class TextureHelper {
-    private val TAG = "TextureHelper"
+    private const val TAG = "TextureHelper"
 
     fun loadTexture(context: Context, resourceId: Int): Int {
         val textureObjectIds = IntArray(1)
@@ -24,14 +21,9 @@ class TextureHelper {
             return 0
         }
 
-        val options: BitmapFactory.Options = BitmapFactory.Options()
-        options.inScaled = false
+        val options = BitmapFactory.Options().apply { inScaled = false }
 
-        val bitmap = BitmapFactory.decodeResource(
-            context.resources,
-            resourceId,
-            options
-        )
+        val bitmap = BitmapFactory.decodeResource(context.resources, resourceId, options)
 
         if (bitmap == null) {
             if (LoggerConfig.ON) {
@@ -41,8 +33,23 @@ class TextureHelper {
             return 0
         }
 
-        glBindTexture(GL_TEXTURE_2D, textureObjectIds[0]);
+        // Bind the texture
+        glBindTexture(GL_TEXTURE_2D, textureObjectIds[0])
 
-        return -111111
+        // Set filtering
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+
+        // Load bitmap data into OpenGL
+        GLUtils.texImage2D(GL_TEXTURE_2D, 0, bitmap, 0)
+        bitmap.recycle()
+
+        // Generate mipmaps
+        glGenerateMipmap(GL_TEXTURE_2D)
+
+        // Unbind texture
+        glBindTexture(GL_TEXTURE_2D, 0)
+
+        return textureObjectIds[0]
     }
 }
