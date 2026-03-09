@@ -43,7 +43,6 @@ object ShaderHelper {
         glGetShaderiv(shaderObjectId, GL_COMPILE_STATUS, compileStatus, 0)
 
         if (compileStatus[0] == 0) {
-            // If it failed, delete the shader object.
             glDeleteShader(shaderObjectId);
             Log.w(TAG, "Compilation of shader failed.");
             return 0;
@@ -67,7 +66,6 @@ object ShaderHelper {
         val linkStatus = IntArray(1)
         glGetProgramiv(programObjectId, GL_LINK_STATUS, linkStatus, 0)
         if (linkStatus[0] == 0) {
-            // If it failed, delete the program object.
             glDeleteProgram(programObjectId);
             Log.w(TAG, "Linking of program failed.");
             return 0;

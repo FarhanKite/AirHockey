@@ -3,34 +3,35 @@ package com.raywenderlich.airhockey.objects
 import com.raywenderlich.airhockey.data.VertexArray
 import com.raywenderlich.airhockey.objects.ObjectBuilder.DrawCommand
 import com.raywenderlich.airhockey.objects.ObjectBuilder.GeneratedData
+import com.raywenderlich.airhockey.objects.ObjectBuilder
 import com.raywenderlich.airhockey.programs.ColorShaderProgram
+import com.raywenderlich.airhockey.util.Geometry.Cylinder
 import com.raywenderlich.airhockey.util.Geometry.Point
 
-class Mallet(
+class Puck(
     val radius: Float,
     val height: Float,
-    numPointsAroundMallet: Int
+    numPointsAroundPuck: Int
 ) {
 
     private val vertexArray: VertexArray
     private val drawList: List<DrawCommand>
 
     init {
-
-        val generatedData: GeneratedData =
-            ObjectBuilder.createMallet(
+        val generatedData: GeneratedData = ObjectBuilder.createPuck(
+            Cylinder(
                 Point(0f, 0f, 0f),
                 radius,
-                height,
-                numPointsAroundMallet
-            )
+                height
+            ),
+            numPointsAroundPuck
+        )
 
         vertexArray = VertexArray(generatedData.vertexData)
         drawList = generatedData.drawList
     }
 
     fun bindData(colorProgram: ColorShaderProgram) {
-
         vertexArray.setVertexAttribPointer(
             0,
             colorProgram.positionAttributeLocation,
