@@ -15,7 +15,6 @@ class ColorShaderProgram(context: Context) :
 
     // Attribute locations
     private val aPositionLocation: Int = glGetAttribLocation(program, A_POSITION)
-//    private val aColorLocation: Int = glGetAttribLocation(program, A_COLOR)
     private val uColorLocation: Int = glGetUniformLocation(program, U_COLOR);
 
     // Pass the matrix into the shader program
@@ -27,7 +26,4 @@ class ColorShaderProgram(context: Context) :
     // Getters for attribute locations
     val positionAttributeLocation: Int
         get() = aPositionLocation
-
-//    val colorAttributeLocation: Int
-//        get() = aColorLocation
 }

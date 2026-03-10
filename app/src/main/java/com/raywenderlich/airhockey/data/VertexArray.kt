@@ -15,6 +15,7 @@ class VertexArray(vertexData: FloatArray) {
         .order(ByteOrder.nativeOrder())
         .asFloatBuffer()
         .put(vertexData)
+        .also { it.position(0) }
 
     fun setVertexAttribPointer(
         dataOffset: Int, attributeLocation: Int,

@@ -6,21 +6,30 @@ import android.opengl.GLES20.glClear
 import android.opengl.GLES20.glClearColor
 import android.opengl.GLES20.glViewport
 import android.opengl.GLSurfaceView
+import android.opengl.Matrix.invertM
 import android.opengl.Matrix.multiplyMM
-import android.opengl.Matrix.orthoM
+import android.opengl.Matrix.multiplyMV
 import android.opengl.Matrix.perspectiveM
 import android.opengl.Matrix.rotateM
 import android.opengl.Matrix.setIdentityM
 import android.opengl.Matrix.setLookAtM
 import android.opengl.Matrix.translateM
+import android.util.Log
 import com.raywenderlich.airhockey.objects.Mallet
 import com.raywenderlich.airhockey.objects.Puck
 import com.raywenderlich.airhockey.objects.Table
 import com.raywenderlich.airhockey.programs.ColorShaderProgram
 import com.raywenderlich.airhockey.programs.TextureShaderProgram
+import com.raywenderlich.airhockey.util.Geometry
+import com.raywenderlich.airhockey.util.Geometry.Point
+import com.raywenderlich.airhockey.util.Geometry.Ray
+import com.raywenderlich.airhockey.util.Geometry.Sphere
 import com.raywenderlich.airhockey.util.TextureHelper
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
+import kotlin.math.max
+import kotlin.math.min
+
 
 class AirHockeyRenderer(private val context: Context) : GLSurfaceView.Renderer {
 
@@ -29,6 +38,7 @@ class AirHockeyRenderer(private val context: Context) : GLSurfaceView.Renderer {
     private val viewMatrix = FloatArray(16)
     private val viewProjectionMatrix = FloatArray(16)
     private val modelViewProjectionMatrix = FloatArray(16)
+    private val invertedViewProjectionMatrix = FloatArray(16)
 
     private lateinit var table: Table
     private lateinit var mallet: Mallet
@@ -37,125 +47,188 @@ class AirHockeyRenderer(private val context: Context) : GLSurfaceView.Renderer {
     private lateinit var colorProgram: ColorShaderProgram
     private var texture: Int = 0
 
+    private var malletPressed = false
+    private lateinit var blueMalletPosition: Point
+    private lateinit var previousBlueMalletPosition: Point
+
+    private val leftBound = -0.5f
+    private val rightBound = 0.5f
+    private val farBound = -0.8f
+    private val nearBound = 0.8f
+
+    private lateinit var puckPosition: Point
+    private lateinit var puckVector: Geometry.Vector
+
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
-        // Set the background clear color
         glClearColor(0f, 0f, 0f, 0f)
 
-        // Initialize objects
         table = Table()
         mallet = Mallet(0.08f, 0.15f, 32)
         puck = Puck(0.06f, 0.02f, 32)
 
-        // Initialize shader programs
+        blueMalletPosition = Point(0f, mallet.height / 2f, 0.4f)
+        previousBlueMalletPosition = blueMalletPosition  //
+
+        puckPosition = Point(0f, puck.height / 2f, 0f)
+        puckVector = Geometry.Vector(0f, 0f, 0f)
+
         textureProgram = TextureShaderProgram(context)
         colorProgram = ColorShaderProgram(context)
 
-        // Load texture
         texture = TextureHelper.loadTexture(context, R.drawable.air_hockey_surface)
     }
 
     override fun onSurfaceChanged(gl: GL10?, width: Int, height: Int) {
         glViewport(0, 0, width, height)
 
-        val aspectRatio = if (width > height) {
-            width.toFloat() / height.toFloat()
-        } else {
-            height.toFloat() / width.toFloat()
-        }
-
         perspectiveM(
             projectionMatrix,
-            0,                  // offset into the array
-            45f,                // field of view in degrees
-            width.toFloat() * 1.4f / height.toFloat(),  // aspect ratio
-            1f,                 // near plane
-            10f                 // far plane
+            0,
+            45f,
+            width.toFloat() * 1.4f / height.toFloat(),
+            1f,
+            10f
         )
         setLookAtM(viewMatrix, 0, 0f, 1.2f, 2.2f, 0f, 0f, 0f, 0f, 1f, 0f)
-
-//        perspectiveM(
-//            projectionMatrix,
-//            0,                  // offset into the array
-//            45f,                // field of view in degrees
-//            width.toFloat() / height.toFloat(),  // aspect ratio
-//            1f,                 // near plane
-//            10f                 // far plane
-//        )
-//        setLookAtM(viewMatrix, 0, 0f, 1.2f, 3f, 0f, 0f, 0f, 0f, 1f, 0f)
-
-        // have to check working or not ...
-//        translateM(modelMatrix, 0, 0f, 0f, -2.5f);
-//        rotateM(modelMatrix, 0, -60f, 1f, 0f, 0f);
-        // ...
-
-//        if (width > height) {
-//            // Landscape
-//            orthoM(
-//                projectionMatrix, 0,
-//                -aspectRatio, aspectRatio,
-//                -1f, 1f,
-//                -1f, 1f
-//            )
-//        } else {
-//            // Portrait or square
-//            orthoM(
-//                projectionMatrix, 0,
-//                -1f, 1f,
-//                -aspectRatio, aspectRatio,
-//                -1f, 1f
-//            )
-//        }
     }
 
     override fun onDrawFrame(gl: GL10?) {
-        // Clear the rendering surface
         glClear(GL_COLOR_BUFFER_BIT)
 
-        multiplyMM(viewProjectionMatrix, 0, projectionMatrix, 0, viewMatrix, 0);
+        // Update puck position
+        puckPosition = puckPosition.translate(puckVector)
 
-        positionTableInScene();
-        textureProgram.useProgram();
-        textureProgram.setUniforms(modelViewProjectionMatrix, texture);
-        table.bindData(textureProgram);
-        table.draw();
+        // Bounce puck off left/right walls
+        if (puckPosition.x < leftBound + puck.radius
+            || puckPosition.x > rightBound - puck.radius
+        ) {
+            puckVector = Geometry.Vector(-puckVector.x, puckVector.y, puckVector.z)
+        }
 
-        // Draw the mallets.
-        positionObjectInScene(0f, mallet.height / 2f, -0.4f);
-        colorProgram.useProgram();
-        colorProgram.setUniforms(modelViewProjectionMatrix, 1f, 0f, 0f);
-        mallet.bindData(colorProgram);
-        mallet.draw();
-        positionObjectInScene(0f, mallet.height / 2f, 0.4f);
-        colorProgram.setUniforms(modelViewProjectionMatrix, 0f, 0f, 1f);
-        // Note that we don't have to define the object data twice -- we just
-        // draw the same mallet again but in a different position and with a
-        // different color.
-        mallet.draw();
+        // Bounce puck off far/near walls
+        if (puckPosition.z < farBound + puck.radius
+            || puckPosition.z > nearBound - puck.radius
+        ) {
+            puckVector = Geometry.Vector(puckVector.x, puckVector.y, -puckVector.z)
+        }
 
-        // Draw the puck.
-        positionObjectInScene(0f, puck.height / 2f, 0f);
-        colorProgram.setUniforms(modelViewProjectionMatrix, 0.8f, 0.8f, 1f);
-        puck.bindData(colorProgram);
-        puck.draw();
+        // Clamp puck within bounds
+        puckPosition = Point(
+            clamp(puckPosition.x, leftBound + puck.radius, rightBound - puck.radius),
+            puckPosition.y,
+            clamp(puckPosition.z, farBound + puck.radius, nearBound - puck.radius)
+        )
+
+        // Build view-projection matrix and its inverse (needed for touch ray casting)
+        multiplyMM(viewProjectionMatrix, 0, projectionMatrix, 0, viewMatrix, 0)
+        invertM(invertedViewProjectionMatrix, 0, viewProjectionMatrix, 0)
+
+        // Draw table
+        positionTableInScene()
+        textureProgram.useProgram()
+        textureProgram.setUniforms(modelViewProjectionMatrix, texture)
+        table.bindData(textureProgram)
+        table.draw()
+
+        // Draw red mallet (opponent - fixed position)
+        positionObjectInScene(0f, mallet.height / 2f, -0.4f)
+        colorProgram.useProgram()
+        colorProgram.setUniforms(modelViewProjectionMatrix, 1f, 0f, 0f)
+        mallet.bindData(colorProgram)
+        mallet.draw()
+
+        // Draw blue mallet (player - moves with touch)
+        positionObjectInScene(blueMalletPosition.x, blueMalletPosition.y, blueMalletPosition.z)
+        colorProgram.setUniforms(modelViewProjectionMatrix, 0f, 0f, 1f)
+        mallet.draw()
+
+        // Draw puck
+        positionObjectInScene(puckPosition.x, puckPosition.y, puckPosition.z)
+        colorProgram.setUniforms(modelViewProjectionMatrix, 0.8f, 0.8f, 1f)
+        puck.bindData(colorProgram)
+        puck.draw()
+
+        // Apply friction to puck
+        puckVector = puckVector.scale(0.99f)
     }
 
     private fun positionTableInScene() {
-// The table is defined in terms of X & Y coordinates, so we rotate it
-// 90 degrees to lie flat on the XZ plane.
         setIdentityM(modelMatrix, 0)
         rotateM(modelMatrix, 0, -90f, 1f, 0f, 0f)
-        multiplyMM(
-            modelViewProjectionMatrix, 0, viewProjectionMatrix,
-            0, modelMatrix, 0
-        )
+        multiplyMM(modelViewProjectionMatrix, 0, viewProjectionMatrix, 0, modelMatrix, 0)
     }
 
     private fun positionObjectInScene(x: Float, y: Float, z: Float) {
         setIdentityM(modelMatrix, 0)
         translateM(modelMatrix, 0, x, y, z)
-        multiplyMM(
-            modelViewProjectionMatrix, 0, viewProjectionMatrix,
-            0, modelMatrix, 0
+        multiplyMM(modelViewProjectionMatrix, 0, viewProjectionMatrix, 0, modelMatrix, 0)
+    }
+
+    fun handleTouchPress(normalizedX: Float, normalizedY: Float) {
+        Log.d("AirHockeyRenderer", "press...")
+
+        val ray = convertNormalized2DPointToRay(normalizedX, normalizedY)
+
+        val malletBoundingSphere = Sphere(
+            Point(blueMalletPosition.x, blueMalletPosition.y, blueMalletPosition.z),
+            mallet.height / 2f
         )
+
+        malletPressed = Geometry.intersects(malletBoundingSphere, ray)
+    }
+
+    private fun convertNormalized2DPointToRay(normalizedX: Float, normalizedY: Float): Ray {
+        val nearPointNdc = floatArrayOf(normalizedX, normalizedY, -1f, 1f)
+        val farPointNdc = floatArrayOf(normalizedX, normalizedY, 1f, 1f)
+
+        val nearPointWorld = FloatArray(4)
+        val farPointWorld = FloatArray(4)
+
+        multiplyMV(nearPointWorld, 0, invertedViewProjectionMatrix, 0, nearPointNdc, 0)
+        multiplyMV(farPointWorld, 0, invertedViewProjectionMatrix, 0, farPointNdc, 0)
+
+        divideByW(nearPointWorld)
+        divideByW(farPointWorld)
+
+        val nearPointRay = Point(nearPointWorld[0], nearPointWorld[1], nearPointWorld[2])
+        val farPointRay = Point(farPointWorld[0], farPointWorld[1], farPointWorld[2])
+
+        return Ray(nearPointRay, Geometry.vectorBetween(nearPointRay, farPointRay))
+    }
+
+    private fun divideByW(vector: FloatArray) {
+        vector[0] /= vector[3]
+        vector[1] /= vector[3]
+        vector[2] /= vector[3]
+    }
+
+    fun handleTouchDrag(normalizedX: Float, normalizedY: Float) {
+        Log.d("AirHockeyRenderer", "drag...")
+
+        if (malletPressed) {
+            val ray = convertNormalized2DPointToRay(normalizedX, normalizedY)
+            val plane = Geometry.Plane(Point(0f, 0f, 0f), Geometry.Vector(0f, 1f, 0f))
+            val touchedPoint = Geometry.intersectionPoint(ray, plane)
+
+            previousBlueMalletPosition = blueMalletPosition
+
+            // Update blue mallet position, clamped to the player's half of the table
+            blueMalletPosition = Point(
+                clamp(touchedPoint.x, leftBound + mallet.radius, rightBound - mallet.radius),
+                mallet.height / 2f,
+                clamp(touchedPoint.z, farBound + mallet.radius, nearBound - mallet.radius)
+            )
+
+            // Check if mallet struck the puck
+            val distance = Geometry.vectorBetween(blueMalletPosition, puckPosition).length()
+            if (distance < (puck.radius + mallet.radius)) {
+                // Launch puck based on mallet's velocity vector
+                puckVector = Geometry.vectorBetween(previousBlueMalletPosition, blueMalletPosition)
+            }
+        }
+    }
+
+    private fun clamp(value: Float, min: Float, max: Float): Float {
+        return min(max, max(value, min))
     }
 }
