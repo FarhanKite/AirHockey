@@ -26,7 +26,6 @@ class Table {
         )
     }
 
-    // Vertex array for OpenGL
     private val vertexArray: VertexArray = VertexArray(VERTEX_DATA)
 
     // Bind the vertex data to the shader program attributes

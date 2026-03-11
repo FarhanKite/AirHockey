@@ -93,7 +93,6 @@ object ShaderHelper {
         // Link them into a shader program
         val program = linkProgram(vertexShader, fragmentShader)
 
-        // Optional validation
         if (LoggerConfig.ON) {
             validateProgram(program)
         }
